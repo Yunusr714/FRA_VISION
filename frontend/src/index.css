@@ -1,0 +1,232 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* FRA Atlas Design System - Forest-centric theme with green & white palette
+Primary colors: Forest green #0B6B3A, Lime green #39B56A, Soft background #F6FBF6
+All colors MUST be HSL for proper theming support.
+*/
+
+@layer base {
+    :root {
+        /* Forest-centric color palette */
+        --background: 104 50% 97%;
+        /* #F6FBF6 - Soft background */
+        --foreground: 215 25% 6%;
+        /* #0F1724 - Text dark */
+
+        --card: 0 0% 100%;
+        /* White cards */
+        --card-foreground: 215 25% 6%;
+
+        --popover: 0 0% 100%;
+        --popover-foreground: 215 25% 6%;
+
+        /* Primary: Forest Green #0B6B3A */
+        --primary: 147 72% 23%;
+        --primary-foreground: 0 0% 100%;
+
+        /* Secondary: Lime Green #39B56A */
+        --secondary: 140 50% 47%;
+        --secondary-foreground: 0 0% 100%;
+
+        /* Muted colors */
+        --muted: 220 13% 91%;
+        --muted-foreground: 220 8.9% 46.1%;
+        /* #6B7280 */
+
+        /* Accent: Info blue #2563EB */
+        --accent: 217 91% 60%;
+        --accent-foreground: 0 0% 100%;
+
+        /* Status colors */
+        --success: 142 76% 36%;
+        /* #16A34A */
+        --warning: 38 92% 50%;
+        /* #F59E0B */
+        --destructive: 0 84% 60%;
+        /* #DC2626 */
+        --destructive-foreground: 0 0% 100%;
+
+
+
+        /* FRA-specific colors */
+        --fraud: 315 61% 33%;
+        /* #8B1E66 - Fraud flag magenta */
+        --pending: 38 92% 50%;
+        /* #F59E0B - Pending amber */
+        --approved: 142 76% 36%;
+        /* #16A34A - Approved green */
+        --rejected: 0 84% 60%;
+        /* #DC2626 - Rejected red */
+        --under-verification: 217 91% 60%;
+        /* #2563EB - Under verification blue */
+        --map-water: 200 100% 90%;
+        /* #DAF3FF - Map water color */
+
+        /* Borders and inputs */
+        --border: 220 13% 91%;
+        --input: 220 13% 91%;
+        --ring: 147 72% 23%;
+
+        --radius: 0.75rem;
+
+        --sidebar-background: 0 0% 98%;
+
+        --sidebar-foreground: 240 5.3% 26.1%;
+
+        --sidebar-primary: 240 5.9% 10%;
+
+        --sidebar-primary-foreground: 0 0% 98%;
+
+        --sidebar-accent: 240 4.8% 95.9%;
+
+        --sidebar-accent-foreground: 240 5.9% 10%;
+
+        --sidebar-border: 220 13% 91%;
+
+        --sidebar-ring: 217.2 91.2% 59.8%;
+    }
+
+    .dark {
+        /* Dark theme with forest overtones */
+        --background: 147 25% 8%;
+        /* Dark forest green background */
+        --foreground: 104 50% 97%;
+
+        --card: 147 25% 10%;
+        --card-foreground: 104 50% 97%;
+
+        --popover: 147 25% 10%;
+        --popover-foreground: 104 50% 97%;
+
+        --primary: 140 50% 47%;
+        /* Lime green for dark mode */
+        --primary-foreground: 147 25% 8%;
+
+        --secondary: 147 20% 15%;
+        --secondary-foreground: 104 50% 97%;
+
+        --muted: 147 20% 15%;
+        --muted-foreground: 220 8.9% 65%;
+
+        --accent: 217 91% 60%;
+        --accent-foreground: 0 0% 100%;
+
+        --success: 142 76% 45%;
+        --warning: 38 92% 55%;
+        --destructive: 0 84% 65%;
+        --destructive-foreground: 0 0% 100%;
+
+        --fraud: 315 61% 45%;
+        --pending: 38 92% 55%;
+        --approved: 142 76% 45%;
+        --rejected: 0 84% 65%;
+        --under-verification: 217 91% 65%;
+        --map-water: 200 100% 20%;
+
+        --border: 147 20% 15%;
+        --input: 147 20% 15%;
+        --ring: 140 50% 47%;
+        --sidebar-background: 240 5.9% 10%;
+        --sidebar-foreground: 240 4.8% 95.9%;
+        --sidebar-primary: 224.3 76.3% 48%;
+        --sidebar-primary-foreground: 0 0% 100%;
+        --sidebar-accent: 240 3.7% 15.9%;
+        --sidebar-accent-foreground: 240 4.8% 95.9%;
+        --sidebar-border: 240 3.7% 15.9%;
+        --sidebar-ring: 217.2 91.2% 59.8%;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+
+    body {
+        @apply bg-background text-foreground font-sans;
+        font-family: 'Inter', 'Noto Sans', sans-serif;
+    }
+
+    /* Forest theme gradients */
+    .bg-forest-gradient {
+        background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+    }
+
+    .bg-soft-gradient {
+        background: linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted)));
+    }
+
+    /* Map-specific styles */
+    .mapboxgl-popup {
+        z-index: 1000;
+    }
+
+    .mapboxgl-popup-content {
+        @apply bg-card text-card-foreground border border-border rounded-lg shadow-lg;
+    }
+
+    /* Animation utilities */
+    .animate-fade-in {
+        animation: fadeIn 0.3s ease-out;
+    }
+
+
+    .animate-slide-up {
+        animation: slideUp 0.3s ease-out;
+    }
+
+    .animate-forest-pulse {
+        animation: forestPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes forestPulse {
+
+        0%,
+        100% {
+            box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4);
+        }
+
+        50% {
+            box-shadow: 0 0 0 10px hsl(var(--primary) / 0);
+        }
+    }
+
+    /* ELI5 indicator */
+    .eli5-mode {
+        @apply border-l-4 border-warning bg-warning/10 pl-4;
+    }
+
+    /* Government emblem placeholder */
+    .govt-emblem {
+        width: 40px;
+        height: 40px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23FFD700' stroke='%23B8860B' stroke-width='3'/%3E%3Cpath d='M30 40h40l-5 20h-30z' fill='%23B8860B'/%3E%3Ctext x='50' y='35' text-anchor='middle' font-size='12' fill='%23B8860B'%3EGoI%3C/text%3E%3C/svg%3E");
+        background-size: contain;
+    }
+}
