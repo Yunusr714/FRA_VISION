@@ -39,8 +39,9 @@ ngoClaimsRouter.post("/claims", async (req, res) => {
   }
   if (!b.village) return res.status(400).json({ error: "village is required" });
 
-  // Auto-generate claim_identifier if not provided
-  const claimIdentifier =  await generateClaimIdentifierSafe(b.type || "IFR");
+  // Base short ID: e.g., IFR-APP-20251001
+  const baseId = await generateClaimIdentifierSafe(b.type || "IFR");
+  const lockName = `claim_id_${baseId}`;
 
   const sql = `
     INSERT INTO claims (
@@ -55,8 +56,9 @@ ngoClaimsRouter.post("/claims", async (req, res) => {
       ?,?,?, ?,?,?,?,? , ?,? , ?,?,?,?, ?, NOW(),
       ?, ?, ?, ?, ?, ?, 'submitted'
     )`;
-  const params = [
-    claimIdentifier,
+
+  const paramsBase = [
+    null, // claim_identifier (will set after picking unique value)
     b.type,
     b.source || "fresh_application",
     b.applicant_category || null,
@@ -90,8 +92,80 @@ ngoClaimsRouter.post("/claims", async (req, res) => {
     b.notes || null
   ];
 
-  const [result] = await pool.query(sql, params);
-  const claimId = result.insertId;
+  let claimId = null;
+  let claimIdentifier = null;
+
+  // Try to get a named lock tied to the base ID (wait up to 5 seconds)
+  const [[lockRow]] = await pool.query(`SELECT GET_LOCK(?, 5) AS got`, [lockName]);
+  if (!lockRow?.got) {
+    // If lock can't be obtained quickly, fall back to a short retry logic without lock
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const candidateId = attempt === 0 ? baseId : `${baseId}-${attempt + 1}`;
+      const params = [...paramsBase];
+      params[0] = candidateId;
+      try {
+        const [result] = await pool.query(sql, params);
+        claimId = result.insertId;
+        claimIdentifier = candidateId;
+        break;
+      } catch (err) {
+        if (err?.code === "ER_DUP_ENTRY") continue;
+        throw err;
+      }
+    }
+    if (!claimId) return res.status(503).json({ error: "Please retry: ID allocation busy." });
+  } else {
+    // We hold the lock: compute next short suffix and insert before releasing the lock
+    try {
+      const [[row]] = await pool.query(
+        `
+        SELECT
+          MAX(
+            CASE
+              WHEN claim_identifier = ? THEN 1
+              ELSE CAST(SUBSTRING_INDEX(claim_identifier, '-', -1) AS UNSIGNED)
+            END
+          ) AS max_sfx
+        FROM claims
+        WHERE claim_identifier = ?
+           OR claim_identifier LIKE CONCAT(?, '-%')
+        `,
+        [baseId, baseId, baseId]
+      );
+
+      const next = (row?.max_sfx ?? 0) + 1;
+      const candidateId = next === 1 ? baseId : `${baseId}-${next}`;
+      const params = [...paramsBase];
+      params[0] = candidateId;
+
+      const [result] = await pool.query(sql, params);
+      claimId = result.insertId;
+      claimIdentifier = candidateId;
+    } catch (err) {
+      // Very unlikely with the lock, but handle duplicate by small retries
+      if (err?.code === "ER_DUP_ENTRY") {
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const candidateId = `${baseId}-${(row?.max_sfx ?? 1) + 1 + attempt}`;
+          const params = [...paramsBase];
+          params[0] = candidateId;
+          try {
+            const [result] = await pool.query(sql, params);
+            claimId = result.insertId;
+            claimIdentifier = candidateId;
+            break;
+          } catch (e2) {
+            if (e2?.code === "ER_DUP_ENTRY") continue;
+            throw e2;
+          }
+        }
+        if (!claimId) throw err;
+      } else {
+        throw err;
+      }
+    } finally {
+      await pool.query(`SELECT RELEASE_LOCK(?)`, [lockName]);
+    }
+  }
 
   if (Array.isArray(b.parties) && b.parties.length) {
     const values = b.parties
