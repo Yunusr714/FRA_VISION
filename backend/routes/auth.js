@@ -9,8 +9,8 @@ import { authRequired } from "../middleware/auth.js";
 export const authRouter = Router();
 
 const loginSchema = z.object({
-  username: z.string().min(3),
-  password: z.string().min(6)
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required")
 });
 
 authRouter.post("/login", async (req, res) => {
@@ -29,7 +29,6 @@ authRouter.post("/login", async (req, res) => {
   );
   const list = rows;
   if (list.length === 0) return res.status(401).json({ error: "Invalid credentials" });
-
   const user = list[0];
   if (user.status !== "active") return res.status(403).json({ error: "User inactive" });
 

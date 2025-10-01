@@ -89,7 +89,7 @@ const Login = () => {
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-2">
           <div className="flex justify-center items-center space-x-4 mb-4">
             <img src="/emblem.png" alt="Emblem" style={{ width: "48px", height: "48px" }} />
           </div>

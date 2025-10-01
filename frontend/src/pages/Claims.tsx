@@ -1,140 +1,186 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Filter, Download, Eye, Calendar } from 'lucide-react';
+import { Search, Filter, Download, Eye, Calendar, Map as MapIcon, CheckCircle, XCircle, Plus, AlertTriangle, ClipboardList } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useAppStore } from '@/store/appStore';
 import { useTranslation } from 'react-i18next';
-import { apiFetch } from '@/lib/api';
+import { NGOClaimsApi } from '@/lib/api';
+import { ClaimsApi, ClaimRow } from '@/lib/claims-api';
+import { OfficerApi } from '@/lib/officer-api';
 
 const Claims = () => {
   const { t } = useTranslation();
-  const { user } = useAuthStore();
+  const { token, user } = useAuthStore();
   const { eli5Mode } = useAppStore();
+  const navigate = useNavigate();
+
+  const role = user?.role;
+  const isNGO = role === 'ngo_user';
+  const isFRD = role === 'forest_revenue_officer' || role === 'mota_admin';
+  const isOfficer = role === 'district_officer' || role === 'mota_admin';
+  const isAdmin = role === 'mota_admin';
+  const isCitizen = role === 'citizen_user';
+  const isPDA = role === 'pda_planner';
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('all');
+  const [loading, setLoading] = useState(false);
+  const [rows, setRows] = useState<ClaimRow[]>([]);
+  const [error, setError] = useState<string>("");
 
-  const sampleClaims = [
-    { id: 'FRA-2024-0001', claimant: 'Raju Singh', village: 'Bichiwara', district: 'Dungarpur', area: 2.5, status: 'pending', submittedDate: '2024-02-15', lastUpdate: '2024-03-01', assignedOfficer: 'Vikram Singh' },
-    { id: 'FRA-2024-0002', claimant: 'Kamla Devi', village: 'Sabla', district: 'Dungarpur', area: 1.8, status: 'pending', submittedDate: '2024-02-20', lastUpdate: '2024-03-01', assignedOfficer: 'Vikram Singh' },
-    { id: 'FRA-2024-0003', claimant: 'Mohan Bhil', village: 'Bichiwara', district: 'Dungarpur', area: 3.2, status: 'under-verification', submittedDate: '2024-03-10', lastUpdate: '2024-03-15', assignedOfficer: 'Priya Sharma' },
-    { id: 'FRA-2024-0004', claimant: 'Sita Garasia', village: 'Kherwara', district: 'Dungarpur', area: 1.2, status: 'rejected', submittedDate: '2024-01-05', lastUpdate: '2024-01-25', assignedOfficer: 'Vikram Singh' },
-    { id: 'FRA-2024-0005', claimant: 'Ramesh Damor', village: 'Sagwara', district: 'Dungarpur', area: 2.8, status: 'fraud', submittedDate: '2024-02-01', lastUpdate: '2024-02-15', assignedOfficer: 'Priya Sharma' },
-  ];
-
-  const [claims, setClaims] = useState(sampleClaims);
+  async function load() {
+    if (!token) return;
+    setLoading(true);
+    setError("");
+    try {
+      const data = isNGO ? await NGOClaimsApi.list(token, {}) : await ClaimsApi.listAll(token, {});
+      setRows(Array.isArray(data) ? (data as ClaimRow[]) : []);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load claims");
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    const apiBase = (import.meta as any).env?.VITE_API_BASE_URL as string | undefined;
-    if (!apiBase) return;
-    apiFetch<any[]>('/api/claims')
-      .then((data) => {
-        if (Array.isArray(data) && data.length) {
-          setClaims(data as any);
-        }
-      })
-      .catch(() => {
-        // keep sample fallback
-      });
-  }, []);
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, role]);
 
-  const getStatusBadge = (status: string) => {
-    const variants: Record<string, any> = {
-      approved: { variant: 'secondary', className: 'bg-success/10 text-success' },
-      pending: { variant: 'destructive', className: 'bg-yellow-100 text-yellow-800' },
-      'under-verification': { variant: 'default', className: 'bg-blue-100 text-blue-800' },
-      rejected: { variant: 'destructive', className: 'bg-red-100 text-red-800' },
-      fraud: { variant: 'destructive', className: 'bg-fraud/10 text-fraud' },
+  const getStatusBadgeClass = (status: string) => {
+    const s = (status || '').replace('-', '_');
+    const classes: Record<string, string> = {
+      approved: 'bg-success/10 text-success',
+      pending: 'bg-yellow-100 text-yellow-800',
+      under_verification: 'bg-blue-100 text-blue-800',
+      rejected: 'bg-red-100 text-red-800',
+      submitted: 'bg-gray-100 text-gray-800',
+      draft: 'bg-gray-100 text-gray-800',
+      fraud: 'bg-fuchsia-100 text-fuchsia-800',
     };
-    return variants[status] || { variant: 'outline' };
+    return classes[s] || 'border';
   };
 
-  const getFilteredClaims = () => {
-  let filtered = claims;
-
-    // Role-based filtering
-    if (user?.role === 'citizen_user') {
-      filtered = filtered.filter(c => c.claimant === user?.name);
-    } else if (user?.role === 'ngo_user') {
-      filtered = sampleClaims.slice(0, 3);
-    } else if (user?.district) {
-      filtered = filtered.filter(c => c.district === user.district.split('-')[1]);
-    }
-
-    // Search filter
+  const filtered = useMemo(() => {
+    let list = [...rows];
     if (searchTerm) {
-      filtered = filtered.filter(c =>
-        c.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.claimant.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.village.toLowerCase().includes(searchTerm.toLowerCase())
+      const q = searchTerm.toLowerCase();
+      list = list.filter(c =>
+        (c.claim_identifier || '').toLowerCase().includes(q) ||
+        (c.village || '').toLowerCase().includes(q) ||
+        (c.gram_panchayat || '').toLowerCase().includes(q) ||
+        (c.block || '').toLowerCase().includes(q)
       );
     }
-
-    // Status filter
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(c => c.status === statusFilter);
+      const key = statusFilter.replace('-', '_');
+      list = list.filter(c => (c.status || '').replace('-', '_') === key);
     }
+    return list;
+  }, [rows, searchTerm, statusFilter]);
 
-    // Date filter (simplified)
-    // TODO: implement date filter properly if needed
+  // Officer quick actions
+  async function quickApprove(id: number) {
+    if (!token) return;
+    try {
+      await OfficerApi.setStatus(token, id, "approved", "Approved from dashboard");
+      await load();
+    } catch (e: any) {
+      alert(e?.message || "Failed to approve");
+    }
+  }
+  async function quickReject(id: number) {
+    if (!token) return;
+    const reason = prompt("Reason for rejection?") || "Rejected from dashboard";
+    try {
+      await OfficerApi.setStatus(token, id, "rejected", reason);
+      await load();
+    } catch (e: any) {
+      alert(e?.message || "Failed to reject");
+    }
+  }
+  async function markFraud(id: number) {
+    if (!token) return;
+    const note = prompt("Add a note for fraud flag (optional):") || "Marked as fraud";
+    try {
+      await OfficerApi.setStatus(token, id, "fraud" as any, note);
+      await load();
+    } catch (e: any) {
+      alert(e?.message || "Failed to mark fraud");
+    }
+  }
 
-    return filtered;
-  };
+  if (!token) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-sm text-muted-foreground">Please log in to view claims.</div>
+      </div>
+    );
+  }
 
-  const filteredClaims = getFilteredClaims();
-  const canCreateClaim = user?.role === 'citizen_user' || user?.role === 'ngo_user';
-  const canViewAll = user?.role === 'mota_admin' || user?.role === 'district_officer';
+  if (isCitizen) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-sm text-muted-foreground">You do not have access to the claims dashboard.</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto p-6 space-y-6">
       {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Filter className="h-5 w-5" />
-            <span>Filters & Search</span>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Filter className="h-5 w-5" />
+              Claims
+            </span>
+            <div className="flex gap-2">
+              {isNGO && (
+                <Button onClick={() => navigate("/ngo/claims/new")}>
+                  <Plus className="h-4 w-4 mr-1" /> New Claim
+                </Button>
+              )}
+              <Button variant="outline">
+                <Download className="mr-2 h-4 w-4" />
+                Export
+              </Button>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-4">
-            {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search claims..."
+                placeholder="Search by Claim ID / Village / GP / Block"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
               />
             </div>
-
-            {/* Status Filter */}
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger>
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="submitted">Submitted</SelectItem>
                 <SelectItem value="under-verification">Under Verification</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
                 <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="fraud">Fraud Flagged</SelectItem>
+                <SelectItem value="fraud">Fraud</SelectItem>
               </SelectContent>
             </Select>
-
-            {/* Export Button */}
-            <Button variant="outline">
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -142,44 +188,106 @@ const Claims = () => {
       {/* Claims Table */}
       <Card>
         <CardContent>
-          {filteredClaims.length > 0 ? (
+          {error && <div className="text-sm text-red-600 mb-3">{error}</div>}
+          {loading ? (
+            <div className="text-sm text-muted-foreground py-8">Loading…</div>
+          ) : filtered.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableCell>ID</TableCell>
-                  <TableCell>Claimant</TableCell>
                   <TableCell>Village</TableCell>
                   <TableCell>Status</TableCell>
+                  {(isFRD || isOfficer || isAdmin) && <TableCell>Geometry</TableCell>}
                   <TableCell>Submitted</TableCell>
-                  {canViewAll && <TableCell>Assigned Officer</TableCell>}
-                  <TableCell>Action</TableCell>
+                  <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredClaims.map((claim) => {
-                  const statusBadge = getStatusBadge(claim.status);
+                {filtered.map((c) => {
+                  const submitted = c.created_at ? new Date(c.created_at).toLocaleDateString() : '-';
+                  const statusClass = getStatusBadgeClass(c.status);
                   return (
-                    <TableRow key={claim.id}>
-                      <TableCell>{claim.id}</TableCell>
-                      <TableCell>{claim.claimant}</TableCell>
-                      <TableCell>{claim.village}</TableCell>
+                    <TableRow key={c.id}>
+                      <TableCell>{c.claim_identifier || `#${c.id}`}</TableCell>
+                      <TableCell>{c.village || '-'}</TableCell>
                       <TableCell>
-                        <Badge className={statusBadge.className}>
-                          {claim.status.replace('-', ' ')}
-                        </Badge>
+                        <Badge className={statusClass}>{String(c.status || '-').replace('_', ' ')}</Badge>
                       </TableCell>
+                      {(isFRD || isOfficer || isAdmin) && (
+                        <TableCell>
+                          <Badge variant="outline">{c.geometry_status || 'not_provided'}</Badge>
+                        </TableCell>
+                      )}
                       <TableCell className="flex items-center space-x-1">
                         <Calendar className="h-3 w-3 text-muted-foreground" />
-                        <span>{claim.submittedDate}</span>
+                        <span>{submitted}</span>
                       </TableCell>
-                      {canViewAll && <TableCell>{claim.assignedOfficer}</TableCell>}
                       <TableCell>
-                        <Button asChild variant="outline" size="sm">
-                          <Link to={`/claims/${claim.id}`}>
-                            <Eye className="mr-1 h-3 w-3" />
-                            View
-                          </Link>
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {/* View always available */}
+                          <Button asChild variant="outline" size="sm">
+                            <Link to={`/claim/view/${c.id}`}>
+                              <Eye className="mr-1 h-3 w-3" />
+                              View
+                            </Link>
+                          </Button>
+
+                          {/* NGO edit + Atlas */}
+                          {isNGO && (
+                            <>
+                              <Button asChild variant="outline" size="sm">
+                                <Link to={`/ngo/claim/${c.id}/edit`}>Edit</Link>
+                              </Button>
+                              <Button variant="outline" size="sm" onClick={() => navigate(`/atlas?claimId=${c.id}`)}>
+                                <MapIcon className="mr-1 h-3 w-3" />
+                                Atlas
+                              </Button>
+                            </>
+                          )}
+
+                          {/* FRD Atlas */}
+                          {isFRD && (
+                            <Button variant="outline" size="sm" onClick={() => navigate(`/atlas?claimId=${c.id}`)}>
+                              <MapIcon className="mr-1 h-3 w-3" />
+                              Atlas
+                            </Button>
+                          )}
+
+                          {/* PDA planner row actions */}
+                          {isPDA && (
+                            <>
+                              <Button variant="outline" size="sm" onClick={() => navigate(`/planning?claimId=${c.id}`)}>
+                                <ClipboardList className="mr-1 h-3 w-3" />
+                                Plan
+                              </Button>
+                              <Button variant="outline" size="sm" onClick={() => navigate(`/atlas?claimId=${c.id}`)}>
+                                <MapIcon className="mr-1 h-3 w-3" />
+                                Atlas
+                              </Button>
+                            </>
+                          )}
+
+                          {/* Officer quick actions */}
+                          {isOfficer && (c.status === 'submitted' || c.status === 'under_verification') && (
+                            <>
+                              <Button size="sm" className="bg-success hover:bg-success/90" onClick={() => quickApprove(c.id)}>
+                                <CheckCircle className="mr-1 h-3 w-3" />
+                                Approve
+                              </Button>
+                              <Button size="sm" variant="destructive" onClick={() => quickReject(c.id)}>
+                                <XCircle className="mr-1 h-3 w-3" />
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                          {isOfficer && (
+                            <Button size="sm" variant="outline" className="text-fuchsia-800 border-fuchsia-300" onClick={() => markFraud(c.id)}>
+                              <AlertTriangle className="mr-1 h-3 w-3 text-fuchsia-700" />
+                              Mark Fraud
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -188,40 +296,16 @@ const Claims = () => {
             </Table>
           ) : (
             <div className="text-center py-8">
-              <p className="text-muted-foreground">No claims found matching your criteria.</p>
-              {canCreateClaim && (
+              <p className="text-muted-foreground">No claims found.</p>
+              {isNGO && (
                 <Button asChild className="mt-4" variant="outline">
-                  <Link to="/claims/new">Submit Your First Claim</Link>
+                  <Link to="/ngo/claims/new">Submit New Claim</Link>
                 </Button>
               )}
             </div>
           )}
         </CardContent>
       </Card>
-
-      {/* Summary Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        {['pending', 'approved', 'under-verification', 'rejected'].map((status) => {
-          const statusCount = filteredClaims.filter(c => c.status === status).length;
-          const statusTitle =
-            status === 'under-verification'
-              ? 'Under Review'
-              : status.charAt(0).toUpperCase() + status.slice(1);
-          return (
-            <Card key={status}>
-              <CardContent className="p-4 flex items-center space-x-2">
-                <div className="w-8 h-8 bg-primary/10 rounded flex items-center justify-center">
-                  <Badge className="w-3 h-3 rounded-full bg-current" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold">{statusCount}</div>
-                  <div className="text-sm text-muted-foreground">{statusTitle}</div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
     </div>
   );
 };

@@ -1,35 +1,35 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
-async function apiFetch<T>(path: string, options: any = {}): Promise<T> {
-  if (!API_BASE) throw new Error("API base URL not configured (VITE_API_BASE_URL)");
+async function rawFetch(path: string, options: any = {}): Promise<Response> {
   const url = `${API_BASE}${path}`;
   const headers: Record<string, string> = options.headers || {};
   if (options.token) headers["Authorization"] = `Bearer ${options.token}`;
-  const res = await fetch(url, {
-    method: options.method || "GET",
-    headers,
-    body: options.body
-  });
-  if (!res.ok) {
-    let detail = "";
-    try { detail = await res.text(); } catch {}
-    throw new Error(`API ${res.status} ${res.statusText}${detail ? `: ${detail}` : ""}`);
-  }
-  try { return await res.json(); } catch { return undefined as unknown as T; }
+  return fetch(url, { method: options.method || "GET", headers, body: options.body });
 }
 
 export const NGOClaimsDocsApi = {
-  upload: (token: string, claimId: number, file: File, doc_type: string, title?: string) => {
+  upload: async (token: string, claimId: number, file: File, doc_type: string, title?: string) => {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("doc_type", doc_type);
     if (title) fd.append("title", title);
-    return apiFetch<{ id: number }>(`/api/ngo/claims/${claimId}/documents`, {
-      token, method: "POST", body: fd, headers: {}
-    });
+    const res = await rawFetch(`/api/ngo/claims/${claimId}/documents`, { token, method: "POST", body: fd, headers: {} });
+    if (!res.ok) throw new Error(`Upload failed ${res.status}`);
+    return res.json();
   },
-  list: (token: string, claimId: number) =>
-    apiFetch<any[]>(`/api/ngo/claims/${claimId}/documents`, { token }),
-  remove: (token: string, claimId: number, docId: number) =>
-    apiFetch(`/api/ngo/claims/${claimId}/documents/${docId}`, { token, method: "DELETE" })
+  list: async (token: string, claimId: number) => {
+    const res = await rawFetch(`/api/ngo/claims/${claimId}/documents`, { token });
+    if (!res.ok) throw new Error(`List failed ${res.status}`);
+    return res.json();
+  },
+  remove: async (token: string, claimId: number, docId: number) => {
+    const res = await rawFetch(`/api/ngo/claims/${claimId}/documents/${docId}`, { token, method: "DELETE" });
+    if (!res.ok) throw new Error(`Delete failed ${res.status}`);
+    return res.json();
+  },
+  previewBlob: async (token: string, docId: number) => {
+    const res = await rawFetch(`/api/ngo/documents/${docId}/preview`, { token });
+    if (!res.ok) throw new Error(`Preview failed ${res.status}`);
+    return res.blob();
+  }
 };

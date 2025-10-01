@@ -22,20 +22,19 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
 }
 
 export const NGOClaimsApi = {
-  list: (token: string, params?: { status?: string; q?: string; state_id?: number; district_id?: number; page?: number; limit?: number }) => {
+  list: (token: string, params?: { status?: string; q?: string; page?: number; limit?: number }) => {
     const sp = new URLSearchParams();
     if (params?.status) sp.set("status", params.status);
     if (params?.q) sp.set("q", params.q);
-    if (params?.state_id) sp.set("state_id", String(params.state_id));
-    if (params?.district_id) sp.set("district_id", String(params.district_id));
     if (params?.page) sp.set("page", String(params.page));
     if (params?.limit) sp.set("limit", String(params.limit));
     const qs = sp.toString() ? `?${sp.toString()}` : "";
     return apiFetch<any[]>(`/api/ngo/claims${qs}`, { token });
   },
   get: (token: string, id: number) => apiFetch<any>(`/api/ngo/claims/${id}`, { token }),
-  create: (token: string, body: any) => apiFetch<{ id: number }>(`/api/ngo/claims`, { token, method: "POST", body }),
-  update: (token: string, id: number, body: any) => apiFetch(`/api/ngo/claims/${id}`, { token, method: "PUT", body })
+  create: (token: string, body: any) => apiFetch<{ id: number; claim_identifier: string }>(`/api/ngo/claims`, { token, method: "POST", body }),
+  update: (token: string, id: number, body: any) => apiFetch(`/api/ngo/claims/${id}`, { token, method: "PUT", body }),
+  replaceParties: (token: string, id: number, parties: any[]) => apiFetch(`/api/ngo/claims/${id}/parties`, { token, method: "POST", body: parties })
 };
 
 export const NGOScanApi = {

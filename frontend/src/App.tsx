@@ -27,6 +27,8 @@ import Admin from "./pages/Admin";
 import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
 import DigitizeLegacyClaim from "@/pages/Ngo/DigitizeLegacyClaim";
+import ClaimDetailPreview from "./pages/Ngo/ClaimDetailsPreview";
+import ClaimEdit from "./pages/Ngo/ClaimEdit";
 
 const queryClient = new QueryClient();
 
@@ -62,8 +64,10 @@ const App = () => (
  <Route path="/atlas" element={<Atlas />} />
  <Route path="/claims" element={<Claims />} />
  <Route path="/ngo/claims/new" element={<NewClaim />} />
+ <Route path="/ngo/claim/:id" element={<ClaimDetailPreview />} />
+ <Route path="/ngo/claim/:id/edit" element={<ClaimEdit />} />
  <Route path="/ngo/digitize" element={<DigitizeLegacyClaim />} />
- <Route path="/claims/:id" element={<ClaimDetail />} />
+ <Route path="/claim/view/:id" element={<ClaimDetail />} />
  <Route path="/tasks" element={<Tasks />} />
  <Route path="/alerts" element={<Alerts />} />
  <Route path="/reports" element={<Reports />} />

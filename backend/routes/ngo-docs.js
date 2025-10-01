@@ -21,73 +21,79 @@ const upload = multer({ storage });
 export const ngoDocsRouter = Router();
 ngoDocsRouter.use(authRequired, requireRoles("ngo_user", "mota_admin"));
 
-/**
- * POST /api/ngo/claims/:id/documents
- * multipart/form-data:
- *  - file: (required) PDF/JPG/PNG
- *  - doc_type: one of id_proof, residence_proof, tribal_certificate, gram_sabha_resolution, survey_docs, other
- *  - title: optional
- */
+function canAccess(user, row) {
+  if (!row) return false;
+  if (user.role_code === "mota_admin") return true;
+  return row.created_by_user_id === user.id && user.role_code === "ngo_user";
+}
+
 ngoDocsRouter.post("/claims/:id/documents", upload.single("file"), async (req, res) => {
-  const claimId = parseInt(req.params.id);
+  const claimId = Number(req.params.id);
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
   const { doc_type, title } = req.body || {};
   if (!doc_type) return res.status(400).json({ error: "doc_type required" });
 
-  // ensure claim exists and is owned by this NGO (or admin)
-  const [rows] = await pool.query("SELECT id, created_by_user_id FROM claims WHERE id = ?", [claimId]);
-  const claim = rows[0];
+  const [[claim]] = await pool.query(`SELECT id, created_by_user_id FROM claims WHERE id = ?`, [claimId]);
   if (!claim) return res.status(404).json({ error: "Claim not found" });
-  if (req.user.role_code !== "mota_admin" && claim.created_by_user_id !== req.user.id) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+  if (!canAccess(req.user, claim)) return res.status(403).json({ error: "Forbidden" });
 
   const f = req.file;
-  const [result] = await pool.query(
+  const [r] = await pool.query(
     `INSERT INTO claim_documents (claim_id, doc_type, title, filename, mime, size_bytes, uploaded_by, access_level)
      VALUES (?, ?, ?, ?, ?, ?, ?, 'restricted')`,
     [claimId, doc_type, title || f.originalname, f.filename, f.mimetype, f.size, req.user.id]
   );
-  res.status(201).json({ id: result.insertId, doc_type, title: title || f.originalname, filename: f.filename, mime: f.mimetype, size: f.size });
+  res.status(201).json({ id: r.insertId });
 });
 
-/**
- * GET /api/ngo/claims/:id/documents
- */
 ngoDocsRouter.get("/claims/:id/documents", async (req, res) => {
-  const claimId = parseInt(req.params.id);
+  const claimId = Number(req.params.id);
   const [rows] = await pool.query(
-    `SELECT id, doc_type, title, filename, mime, size_bytes, created_at FROM claim_documents WHERE claim_id = ? ORDER BY created_at DESC`,
+    `SELECT id, doc_type, title, filename, mime, size_bytes, created_at
+     FROM claim_documents WHERE claim_id = ? ORDER BY created_at DESC`,
     [claimId]
   );
   res.json(rows);
 });
 
-/**
- * DELETE /api/ngo/claims/:id/documents/:docId
- */
-ngoDocsRouter.delete("/claims/:id/documents/:docId", async (req, res) => {
-  const claimId = parseInt(req.params.id);
-  const docId = parseInt(req.params.docId);
+ngoDocsRouter.get("/documents/:docId/preview", async (req, res) => {
+  const docId = Number(req.params.docId);
+  const [[doc]] = await pool.query(
+    `SELECT d.*, c.created_by_user_id
+     FROM claim_documents d
+     JOIN claims c ON c.id = d.claim_id
+     WHERE d.id = ?`,
+    [docId]
+  );
+  if (!doc) return res.status(404).json({ error: "Not found" });
+  if (!canAccess(req.user, doc)) return res.status(403).json({ error: "Forbidden" });
 
-  const [rows] = await pool.query(
-    `SELECT d.*, c.created_by_user_id FROM claim_documents d
+  const filePath = path.join(uploadDir, doc.filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: "File missing" });
+
+  res.setHeader("Content-Type", doc.mime || "application/octet-stream");
+  res.setHeader("Content-Disposition", `inline; filename="${doc.title || doc.filename}"`);
+  fs.createReadStream(filePath).pipe(res);
+});
+
+ngoDocsRouter.delete("/claims/:id/documents/:docId", async (req, res) => {
+  const claimId = Number(req.params.id);
+  const docId = Number(req.params.docId);
+
+  const [[doc]] = await pool.query(
+    `SELECT d.*, c.created_by_user_id
+     FROM claim_documents d
      JOIN claims c ON c.id = d.claim_id
      WHERE d.id = ? AND d.claim_id = ?`,
     [docId, claimId]
   );
-  const doc = rows[0];
   if (!doc) return res.status(404).json({ error: "Not found" });
-  if (req.user.role_code !== "mota_admin" && doc.created_by_user_id !== req.user.id) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+  if (!canAccess(req.user, doc)) return res.status(403).json({ error: "Forbidden" });
 
-  // delete file from disk (best-effort)
+  await pool.query(`DELETE FROM claim_documents WHERE id = ?`, [docId]);
   try {
     const filePath = path.join(uploadDir, doc.filename);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   } catch {}
-
-  await pool.query("DELETE FROM claim_documents WHERE id = ?", [docId]);
   res.json({ success: true });
 });

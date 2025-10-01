@@ -9,6 +9,8 @@ import { useAuthStore } from "@/store/authStore";
 import { NGOClaimsApi } from "@/lib/api";
 import { NGOClaimsDocsApi } from "@/lib/ngo-docs-api";
 import { useNavigate } from "react-router-dom";
+import { Trash2 } from "lucide-react";
+import { useFormPersist, clearPersistedForm } from "../hooks/useFormPresist";
 
 const EVIDENCE_TYPES = [
   { key: "id_proof", label: "ID Proof (Aadhaar/Voter ID/PAN)" },
@@ -18,6 +20,8 @@ const EVIDENCE_TYPES = [
   { key: "survey_docs", label: "Survey Documents" },
   { key: "other", label: "Other Supporting Document" }
 ] as const;
+
+const FORM_KEY = "fra:new-claim-ngo";
 
 export default function NewClaimNGO() {
   const { token } = useAuthStore();
@@ -56,9 +60,9 @@ export default function NewClaimNGO() {
     location_source: "ngo"
   });
 
-  // Evidence files (per doc type allow multiple)
-  const [evidenceFiles, setEvidenceFiles] = useState<Record<string, File[]>>({});
+  useFormPersist(FORM_KEY, form, setForm);
 
+  const [evidenceFiles, setEvidenceFiles] = useState<Record<string, File[]>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>("");
 
@@ -69,21 +73,41 @@ export default function NewClaimNGO() {
       arr[idx] = { ...arr[idx], [k]: v };
       return { ...prev, parties: arr };
     });
-  const addParty = () => setForm((prev: any) => ({ ...prev, parties: [...prev.parties, { name: "", gender: "", tribe: "", id_type: "", id_number: "", relation: "", age: "" }] }));
-  const removeParty = (idx: number) => setForm((prev: any) => ({ ...prev, parties: prev.parties.filter((_: any, i: number) => i !== idx) }));
+  const addParty = () =>
+    setForm((prev: any) => ({
+      ...prev,
+      parties: [
+        ...prev.parties,
+        { name: "", gender: "", tribe: "", id_type: "", id_number: "", relation: "", age: "" }
+      ]
+    }));
+  const removeParty = (idx: number) =>
+    setForm((prev: any) => ({ ...prev, parties: prev.parties.filter((_: any, i: number) => i !== idx) }));
 
   function onEvidenceChange(type: string, files: FileList | null) {
     if (!files) return;
     setEvidenceFiles((prev) => ({ ...prev, [type]: Array.from(files) }));
-    // Optional: auto-set evidence flag true when files selected
-    setForm((prev: any) => ({ ...prev, evidence_flags: { ...prev.evidence_flags, [type]: files.length > 0 } }));
+    setForm((prev: any) => ({
+      ...prev,
+      evidence_flags: { ...prev.evidence_flags, [type]: files.length > 0 }
+    }));
+  }
+  function removeStaged(type: string, index: number) {
+    setEvidenceFiles((prev) => {
+      const arr = (prev[type] || []).slice();
+      arr.splice(index, 1);
+      return { ...prev, [type]: arr };
+    });
   }
 
   async function submit() {
-    if (!token) return;
+    if (!token) {
+      setError("Not authenticated. Please log in again.");
+      return;
+    }
     setSaving(true);
     setError("");
-    // Validate lat/lon if provided
+
     const lat = form.location_lat ? Number(form.location_lat) : null;
     const lon = form.location_lon ? Number(form.location_lon) : null;
     if ((lat !== null && (lat < -90 || lat > 90)) || (lon !== null && (lon < -180 || lon > 180))) {
@@ -91,6 +115,7 @@ export default function NewClaimNGO() {
       setSaving(false);
       return;
     }
+
     try {
       const payload = {
         type: form.type,
@@ -117,20 +142,18 @@ export default function NewClaimNGO() {
         location_accuracy_m: form.location_accuracy_m ? Number(form.location_accuracy_m) : undefined,
         location_source: form.location_source || "ngo"
       };
-      // 1) Create claim
+
       const res = await NGOClaimsApi.create(token, payload);
       const claimId = res.id;
 
-      // 2) Upload evidence files per type
       const types = Object.keys(evidenceFiles);
       for (const type of types) {
-        const files = evidenceFiles[type];
-        for (const f of files) {
+        for (const f of evidenceFiles[type]) {
           await NGOClaimsDocsApi.upload(token, claimId, f, type, f.name);
         }
       }
 
-      // 3) Navigate to claim detail (or NGO dashboard)
+      clearPersistedForm(FORM_KEY);
       navigate(`/ngo/claim/${claimId}`);
     } catch (e: any) {
       setError(e?.message || "Failed to create claim");
@@ -285,18 +308,93 @@ export default function NewClaimNGO() {
         </CardContent>
       </Card>
 
+      {/* Parties (Claimants) */}
+      <Card>
+        <CardHeader><CardTitle>Parties (Claimants)</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          {form.parties.map((p: any, idx: number) => (
+            <div key={idx} className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end border p-3 rounded">
+              <div className="md:col-span-2">
+                <Label>Name</Label>
+                <Input value={p.name} onChange={(e) => updateParty(idx, "name", e.target.value)} />
+              </div>
+              <div>
+                <Label>Gender</Label>
+                <Select value={p.gender} onValueChange={(v) => updateParty(idx, "gender", v)}>
+                  <SelectTrigger><SelectValue placeholder="-" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Tribe</Label>
+                <Input value={p.tribe} onChange={(e) => updateParty(idx, "tribe", e.target.value)} />
+              </div>
+              <div>
+                <Label>ID Type</Label>
+                <Input value={p.id_type} onChange={(e) => updateParty(idx, "id_type", e.target.value)} placeholder="Aadhaar / VoterID" />
+              </div>
+              <div>
+                <Label>ID Number</Label>
+                <Input value={p.id_number} onChange={(e) => updateParty(idx, "id_number", e.target.value)} />
+              </div>
+              <div>
+                <Label>Relation</Label>
+                <Input value={p.relation} onChange={(e) => updateParty(idx, "relation", e.target.value)} placeholder="Head / Member" />
+              </div>
+              <div>
+                <Label>Age</Label>
+                <Input type="number" value={p.age} onChange={(e) => updateParty(idx, "age", e.target.value)} />
+              </div>
+              <div className="md:col-span-6 flex justify-end">
+                <Button variant="ghost" onClick={() => removeParty(idx)} disabled={form.parties.length === 1}>
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ))}
+          <Button variant="outline" onClick={addParty}>Add Party</Button>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader><CardTitle>Evidence Uploads (PDF/JPG/PNG)</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           {EVIDENCE_TYPES.map((t) => (
-            <div key={t.key} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-              <div className="md:col-span-2">
-                <Label>{t.label}</Label>
-                <Input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple onChange={(e) => onEvidenceChange(t.key, e.target.files)} />
+            <div key={t.key} className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                <div className="md:col-span-2">
+                  <Label>{t.label}</Label>
+                  <Input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple onChange={(e) => onEvidenceChange(t.key, e.target.files)} />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {evidenceFiles[t.key]?.length ? `${evidenceFiles[t.key].length} file(s) selected` : "No files selected"}
+                </div>
               </div>
-              <div className="text-xs text-muted-foreground">
-                {evidenceFiles[t.key]?.length ? `${evidenceFiles[t.key].length} file(s) selected` : "No files selected"}
-              </div>
+              {evidenceFiles[t.key]?.length ? (
+                <div className="grid gap-2 md:grid-cols-3">
+                  {evidenceFiles[t.key].map((file, idx) => {
+                    const url = URL.createObjectURL(file);
+                    const isImage = /image\/(png|jpe?g|gif|webp)/i.test(file.type);
+                    const isPdf = file.type === "application/pdf";
+                    return (
+                      <div key={idx} className="border rounded p-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="truncate mr-2" title={file.name}>{file.name}</span>
+                          <Button variant="ghost" size="sm" onClick={() => removeStaged(t.key, idx)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        {isImage && <img src={url} alt={file.name} className="mt-2 max-h-40 object-contain w-full" onLoad={() => URL.revokeObjectURL(url)} />}
+                        {isPdf && <div className="mt-2 text-xs text-muted-foreground">PDF selected — preview after upload.</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
           ))}
           <div className="text-xs text-muted-foreground">
