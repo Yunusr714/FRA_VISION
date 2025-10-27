@@ -1,4 +1,6 @@
-# Node.js
+# ===============================
+# Node.js / React
+# ===============================
 node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -32,7 +34,6 @@ build/
 out/
 
 # React specific
-# (React build files)
 *.cache
 *.tmp
 .DS_Store
@@ -58,3 +59,74 @@ coverage/
 # OS generated
 .DS_Store
 Thumbs.db
+
+# ===============================
+# Python / Flask
+# ===============================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+ENV/
+.venv/
+.pyenv/
+pip-wheel-metadata/
+
+# Flask instance folder (for uploads, configs, etc.)
+instance/
+*.db
+*.sqlite3
+
+# Pytest / Unit test cache
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+
+# Packaging
+*.egg
+*.egg-info/
+.eggs/
+build/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.manifest
+*.spec
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Profiling
+*.prof
+
+# MyPy / Type checker
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Pylint / Bandit / Coverage
+.pylint.d/
+.bandit/
+coverage.xml
+
+# SQLite DBs created by Flask apps
+*.sqlite
+*.sqlite3
+
+# Local configs
+config.py

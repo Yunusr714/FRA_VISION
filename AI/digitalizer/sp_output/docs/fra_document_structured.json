@@ -1,0 +1,45 @@
+{
+  "input": "C:\\Data\\01_Projects\\Work\\FRA_Vision\\AI\\digitalizer\\sample_data\\fra_document.png",
+  "page_count": 1,
+  "pages": [
+    {
+      "page_number": 1,
+      "fields": {
+        "claimant_name": null,
+        "spouse_name": null,
+        "father_name": null,
+        "mother_name": null,
+        "address": null,
+        "village": null,
+        "gram_panchayat": null,
+        "tehsil_taluka": null,
+        "district": null,
+        "scheduled_tribe": null,
+        "otfd": null,
+        "other_members": [],
+        "habitation_area_ha": null,
+        "self_cultivation_area_ha": null,
+        "signature_present": true
+      },
+      "ocr_json_path": "./sp_output\\pages\\fra_document_p1_ocr.json",
+      "overlay_path": "./sp_output\\overlays\\fra_document_p1.png"
+    }
+  ],
+  "extracted": {
+    "claimant_name": null,
+    "spouse_name": null,
+    "father_name": null,
+    "mother_name": null,
+    "address": null,
+    "village": null,
+    "gram_panchayat": null,
+    "tehsil_taluka": null,
+    "district": null,
+    "scheduled_tribe": null,
+    "otfd": null,
+    "other_members": [],
+    "habitation_area_ha": null,
+    "self_cultivation_area_ha": null,
+    "signature_present": true
+  }
+}
